@@ -38,7 +38,7 @@ impl Opts {
 
     pub fn start_options(&self) -> &StartOptions {
         match &self.chain_id {
-            ChainId::Mainnet(args) | ChainId::Testnet(args) => args
+            ChainId::Mainnet(args) | ChainId::Testnet(args) => args,
         }
     }
 }
@@ -53,23 +53,21 @@ async fn main() -> Result<(), tokio::io::Error> {
 
     match &opts.chain_id {
         ChainId::Mainnet(_) => {
-            lake_config_builder = lake_config_builder
-                .mainnet();
+            lake_config_builder = lake_config_builder.mainnet();
         }
         ChainId::Testnet(_) => {
-            lake_config_builder = lake_config_builder
-                .testnet();
+            lake_config_builder = lake_config_builder.testnet();
         }
     }
 
-    lake_config_builder = lake_config_builder
-        .start_block_height(get_start_block_height(&opts).await);
+    lake_config_builder =
+        lake_config_builder.start_block_height(get_start_block_height(&opts).await);
 
     let config = lake_config_builder
         .build()
         .expect("Failed to build LakeConfig");
 
-    let stream = near_lake_framework::streamer(config);
+    let (_, stream) = near_lake_framework::streamer(config);
 
     let mut handlers = tokio_stream::wrappers::ReceiverStream::new(stream)
         .map(handle_streamer_message)
@@ -84,15 +82,14 @@ async fn get_start_block_height(opts: &Opts) -> u64 {
     match opts.start_options() {
         StartOptions::FromBlock { height } => *height,
         StartOptions::FromLatest => final_block_height(opts.rpc_url()).await,
-        StartOptions::FromInterruption => {
-            match &std::fs::read("last_indexed_block") {
-                Ok(contents) => {
-                    String::from_utf8_lossy(contents).parse().unwrap()
-                }
-                Err(e) => {
-                    eprintln!("Cannot read last_indexed_block.\n{}\nStart indexer from latest final", e);
-                    final_block_height(opts.rpc_url()).await
-                }
+        StartOptions::FromInterruption => match &std::fs::read("last_indexed_block") {
+            Ok(contents) => String::from_utf8_lossy(contents).parse().unwrap(),
+            Err(e) => {
+                eprintln!(
+                    "Cannot read last_indexed_block.\n{}\nStart indexer from latest final",
+                    e
+                );
+                final_block_height(opts.rpc_url()).await
             }
         },
     }
@@ -117,7 +114,11 @@ async fn handle_streamer_message(
         streamer_message.block.header.height,
         streamer_message.shards.len()
     );
-    std::fs::write("last_indexed_block", streamer_message.block.header.height.to_string().as_bytes()).unwrap();
+    std::fs::write(
+        "last_indexed_block",
+        streamer_message.block.header.height.to_string().as_bytes(),
+    )
+    .unwrap();
 }
 
 pub(crate) fn init_tracing() {
